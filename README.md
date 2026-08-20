@@ -1,98 +1,72 @@
-# Selective Face Anonymization in Video
+# Anonimização seletiva de rostos em vídeo
 
-A Python project that identifies one person in a video from a reference image and blurs only that person's face. The expected output is an MP4 video with the original audio preserved.
+Esta aplicação mantém visível a pessoa presente na imagem de referência e desfoca todos os outros rostos detectados no vídeo. Ela processa cada frame, produz um MP4 H.264 e preserva o áudio de origem quando existir.
 
-> **Status:** under development. At the moment, the repository contains only the initial structure and the V1 plan; video processing has not been implemented yet.
+## Como funciona
 
-## V1 Goal
+~~~
+Imagem de referência -> detectar um rosto -> embedding ArcFace
 
-Accept a reference image and a video, locate the matching person in the frames, and blur only their face.
+Vídeo -> para cada frame:
+         detectar rostos (RetinaFace)
+         -> comparar com a referência (similaridade de cosseno)
+         -> manter o alvo / desfocar não-alvos
+         -> escrever frame
+      -> FFmpeg: H.264 + áudio original (ou AAC)
+~~~
 
-## Planned workflow
+A Chain of Responsibility de execução é:
 
-```text
-Reference image
-        │
-        ▼
-Face detection (RetinaFace) ──► Preprocessing ──► Face embedding (FaceNet)
-                                                            │
-Input video ──► Face detection per frame ───────────────────┤
-                                                            ▼
-                                                 Similarity comparison
-                                                            │
-                                                            ▼
-                                                   Blur target face
-                                                            │
-                                                            ▼
-                                    Final video + original audio (FFmpeg)
-```
+~~~
+Validar entradas -> Preparar referência -> Processar vídeo -> Exportar MP4
+~~~
 
-## Inputs and output
+Durante o processamento de vídeo, cada frame percorre a cadeia:
 
-| Item | Description |
-| --- | --- |
-| `reference_image` | An image containing exactly one face of the person to anonymize. |
-| `input_video` | The video to process. |
-| `output_video` | Destination path for the generated anonymized MP4 video. |
-| `similarity_threshold` | Configurable value that determines whether a face matches the reference person. |
+~~~
+Detectar faces -> Identificar alvo -> Desfocar não-alvos -> Gravar frame
+~~~
 
-## Planned requirements
+## Requisitos
 
-- Python 3.13, or a version compatible with the selected libraries;
-- OpenCV;
-- NumPy;
-- RetinaFace;
-- a FaceNet implementation based on **PyTorch** or **TensorFlow** (the choice has not been made yet);
-- FFmpeg, to preserve or remux the video audio.
+- Python 3.13 ou superior;
+- FFmpeg disponível no PATH;
+- dependências declaradas em pyproject.toml;
+- conexão com a internet na primeira execução, para baixar os pesos ArcFace do DeepFace.
 
-## How to run
+O DeepFace usa GPU automaticamente quando o ambiente compatível estiver disponível; caso contrário, usa CPU.
 
-The processing interface is still under development. Once it is available, usage should follow this format:
+## Instalação
 
-```bash
-python -m src.main \
-  --reference-image data/reference/person.jpg \
-  --input-video data/input/video.mp4 \
-  --output-video data/output/anonymized_video.mp4 \
-  --similarity-threshold 0.8
-```
+~~~
+python -m venv .venv
+.venv\Scripts\activate
+pip install -e .
+ffmpeg -version
+~~~
 
-For now, the existing entry point can be run with:
+## Uso
 
-```bash
-python main.py
-```
+~~~
+python main.py ^
+  --reference-image data\reference\pessoa.jpg ^
+  --input-video data\input\video.mp4 ^
+  --output-video data\output\anonimizado.mp4 ^
+  --similarity-threshold 0.80
+~~~
 
-## Planned structure
+Opcionalmente, use --debug-dir debug para salvar a referência anotada e o primeiro frame com faces, caixas e pontuações.
 
-```text
-.
-├── Assets/             # Supporting images
-├── Notebooks/          # Experiments and exploratory tests
-├── main.py             # Initial entry point
-├── TODO.md             # V1 plan and acceptance criteria
-├── src/                # Processing source code (to be created)
-├── tests/              # Automated tests (to be created)
-└── data/
-    ├── reference/      # Reference images (to be created)
-    ├── input/          # Input videos (to be created)
-    └── output/         # Processed videos (to be created)
-```
+--similarity-threshold aceita valores entre 0 e 1. A similaridade é a cosseno entre embeddings ArcFace: faces com valor maior ou igual ao limiar são consideradas o alvo e permanecem nítidas. O padrão é 0.80.
 
-## Known limitations
+Durante a execução, tqdm mostra o andamento dos frames, velocidade, estimativa de tempo e os contadores de rostos mantidos e desfocados. As quatro etapas também são exibidas antes de iniciar.
 
-Results may be affected by:
+O caminho de saída deve terminar em .mp4. Caso o arquivo já exista, ele é substituído somente após uma exportação bem-sucedida. Vídeos locais, modelos e resultados gerados são ignorados pelo Git.
 
-- occluded, very small, or extremely angled faces;
-- poor lighting, low resolution, or intense movement;
-- multiple similar-looking people in the same video;
-- face detection or identification failures;
-- input videos with no audio.
+## Limitações
 
-## Privacy and responsible use
-
-Use images and videos only with appropriate authorization and in accordance with applicable law. Automatic anonymization can fail; review the final video before sharing it whenever identity protection is important.
-
-## Planning
-
-The detailed milestones, tests, and acceptance criteria are available in [TODO.md](TODO.md).
+- A imagem de referência deve conter exatamente um rosto.
+- A V1 detecta e compara faces em todos os frames; não usa rastreamento.
+- Um rosto que o detector não encontrar não pode ser desfocado.
+- Iluminação baixa, oclusões, rostos pequenos ou parecidos podem exigir ajustar o limiar.
+- Revise o vídeo final antes de compartilhar conteúdo que exija proteção de identidade.
