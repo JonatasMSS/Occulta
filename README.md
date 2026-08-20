@@ -37,6 +37,8 @@ Detectar faces -> Identificar alvo -> Desfocar não-alvos -> Gravar frame
 
 O DeepFace usa GPU automaticamente quando o ambiente compatível estiver disponível; caso contrário, usa CPU. No Windows nativo com TensorFlow 2.11 ou superior, CUDA não é suportado: use WSL2 com GPU NVIDIA configurada para acelerar a inferência.
 
+O projeto seleciona automaticamente tf-keras (Keras 2) antes de carregar TensorFlow, pois o RetinaFace ainda não é compatível com a API Keras 3.
+
 ## Instalação
 
 ~~~

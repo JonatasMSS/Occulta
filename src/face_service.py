@@ -1,5 +1,11 @@
 from __future__ import annotations
 
+import os
+
+# RetinaFace 0.0.18 builds models with the legacy Keras API.
+# This must be set before TensorFlow is imported.
+os.environ.setdefault("TF_USE_LEGACY_KERAS", "1")
+
 import cv2
 import numpy as np
 
