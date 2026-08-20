@@ -9,5 +9,6 @@ dependencies = [
     "numpy",
     "opencv-python",
     "retina-face",
+    "tf-keras",
     "tqdm",
 ]
