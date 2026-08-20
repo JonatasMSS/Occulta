@@ -15,6 +15,13 @@ class Face:
 
 
 @dataclass
+class TrackedFace:
+    tracker: Any
+    similarity: float
+    confidence: float
+
+
+@dataclass
 class FrameContext:
     frame: np.ndarray
     index: int
@@ -22,7 +29,10 @@ class FrameContext:
     service: Any
     reference_embedding: np.ndarray
     similarity_threshold: float
+    should_detect: bool
+    tracks: list[TrackedFace]
     faces: list[Face] = field(default_factory=list)
+    detected: bool = False
 
 
 @dataclass
@@ -31,6 +41,7 @@ class PipelineContext:
     input_video: Path
     output_video: Path
     similarity_threshold: float = 0.80
+    detection_interval: int = 5
     debug_dir: Path | None = None
     service: Any = None
     reference_embedding: np.ndarray | None = None
@@ -40,6 +51,9 @@ class PipelineContext:
     frames_processed: int = 0
     faces_kept: int = 0
     faces_blurred: int = 0
+    frames_detected: int = 0
+    frames_tracked: int = 0
+    tracks: list[TrackedFace] = field(default_factory=list)
     debug_frame_written: bool = False
     history: list[str] = field(default_factory=list)
 

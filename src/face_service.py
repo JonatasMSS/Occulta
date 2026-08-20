@@ -3,11 +3,29 @@ from __future__ import annotations
 import cv2
 import numpy as np
 
-from src.core import Face, PipelineError
+from src.core import Face, PipelineError, TrackedFace
 
 
 class FaceService:
     """Small adapter around RetinaFace detection and DeepFace ArcFace embeddings."""
+
+    def __init__(self) -> None:
+        self.device = self._configure_device()
+
+    @staticmethod
+    def _configure_device() -> str:
+        try:
+            import tensorflow as tf
+
+            gpus = tf.config.list_physical_devices("GPU")
+            for gpu in gpus:
+                try:
+                    tf.config.experimental.set_memory_growth(gpu, True)
+                except RuntimeError:
+                    pass
+            return f"GPU ({gpus[0].name})" if gpus else "CPU"
+        except Exception:
+            return "CPU"
 
     def detect(self, image: np.ndarray) -> list[Face]:
         try:
@@ -33,16 +51,19 @@ class FaceService:
                 faces.append(Face((x1, y1, x2, y2), float(value.get("score", 0.0))))
         return faces
 
-    def embedding(self, image: np.ndarray, face: Face) -> np.ndarray:
-        x1, y1, x2, y2 = face.box
-        crop = image[y1:y2, x1:x2]
-        if crop.size == 0:
-            raise PipelineError("face embedding", "could not crop detected face")
+    def embeddings(self, image: np.ndarray, faces: list[Face]) -> list[np.ndarray]:
+        crops = []
+        for face in faces:
+            x1, y1, x2, y2 = face.box
+            crop = image[y1:y2, x1:x2]
+            if crop.size == 0:
+                raise PipelineError("face embedding", "could not crop detected face")
+            crops.append(crop)
         try:
             from deepface import DeepFace
 
             result = DeepFace.represent(
-                img_path=crop,
+                img_path=crops,
                 model_name="ArcFace",
                 detector_backend="skip",
                 enforce_detection=False,
@@ -51,7 +72,35 @@ class FaceService:
             raise PipelineError("face embedding", str(error)) from error
         if not result:
             raise PipelineError("face embedding", "ArcFace did not return an embedding")
-        return np.asarray(result[0]["embedding"], dtype=np.float32)
+        return [np.asarray(item[0]["embedding"], dtype=np.float32) for item in result]
+
+    def embedding(self, image: np.ndarray, face: Face) -> np.ndarray:
+        return self.embeddings(image, [face])[0]
+
+    @staticmethod
+    def create_tracks(image: np.ndarray, faces: list[Face]) -> list[TrackedFace]:
+        tracks = []
+        for face in faces:
+            x1, y1, x2, y2 = face.box
+            tracker = cv2.TrackerMIL_create()
+            tracker.init(image, (x1, y1, x2 - x1, y2 - y1))
+            tracks.append(TrackedFace(tracker, face.similarity or 0.0, face.confidence))
+        return tracks
+
+    @staticmethod
+    def update_tracks(image: np.ndarray, tracks: list[TrackedFace]) -> list[Face] | None:
+        faces = []
+        height, width = image.shape[:2]
+        for track in tracks:
+            ok, (x, y, box_width, box_height) = track.tracker.update(image)
+            if not ok:
+                return None
+            x1, y1 = max(0, int(x)), max(0, int(y))
+            x2, y2 = min(width, int(x + box_width)), min(height, int(y + box_height))
+            if x2 <= x1 or y2 <= y1:
+                return None
+            faces.append(Face((x1, y1, x2, y2), track.confidence, track.similarity))
+        return faces
 
     @staticmethod
     def similarity(reference: np.ndarray, candidate: np.ndarray) -> float:

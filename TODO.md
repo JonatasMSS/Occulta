@@ -5,11 +5,12 @@
 - [x] CLI com imagem de referência, vídeo de entrada, vídeo MP4 de saída, limiar e diretório de depuração.
 - [x] Validação de arquivos, limiar, FFmpeg e referência com exatamente um rosto.
 - [x] RetinaFace para detectar rostos e DeepFace/ArcFace para embeddings.
-- [x] Chain of Responsibility por frame: detectar, comparar, desfocar não-alvos e gravar.
+- [x] Chain of Responsibility por frame: detectar/rastrear, comparar em lote, desfocar não-alvos e gravar.
 - [x] Blur gaussiano proporcional ao rosto.
 - [x] MP4 H.264 com cópia de áudio quando possível e fallback para AAC.
 - [x] Limpeza de temporários e prevenção de saída parcial.
 - [x] Progresso, resumo e depuração visual opcional.
+- [x] GPU automática quando TensorFlow a detecta, com fallback para CPU.
 
 ## Validação manual pendente
 

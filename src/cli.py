@@ -13,6 +13,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--input-video", required=True, type=Path)
     parser.add_argument("--output-video", required=True, type=Path)
     parser.add_argument("--similarity-threshold", default=0.8, type=float)
+    parser.add_argument("--detection-interval", default=5, type=int)
     parser.add_argument("--debug-dir", type=Path)
     return parser
 
@@ -24,6 +25,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         input_video=args.input_video,
         output_video=args.output_video,
         similarity_threshold=args.similarity_threshold,
+        detection_interval=args.detection_interval,
         debug_dir=args.debug_dir,
     )
     try:
@@ -34,6 +36,10 @@ def main(argv: Sequence[str] | None = None) -> int:
     finally:
         context.cleanup_temporary_files()
 
-    print(f"Completed: {context.frames_processed} frames, {context.faces_kept} target faces kept, {context.faces_blurred} faces blurred.")
+    print(
+        f"Completed: {context.frames_processed} frames "
+        f"({context.frames_detected} detected, {context.frames_tracked} tracked), "
+        f"{context.faces_kept} target faces kept, {context.faces_blurred} faces blurred."
+    )
     print(f"Output: {context.output_video}")
     return 0

@@ -17,6 +17,8 @@ class ValidateInputHandler(Handler):
         print("Etapa 1/4: validando entradas...")
         if not 0.0 <= context.similarity_threshold <= 1.0:
             raise PipelineError("validation", "similarity threshold must be between 0 and 1")
+        if context.detection_interval < 1:
+            raise PipelineError("validation", "detection interval must be at least 1")
         if context.output_video.suffix.lower() != ".mp4":
             raise PipelineError("validation", "output video must use the .mp4 extension")
         for label, path in (("reference image", context.reference_image), ("input video", context.input_video)):
@@ -38,6 +40,7 @@ class PrepareReferenceHandler(Handler):
             raise PipelineError("reference", "could not read the reference image")
 
         context.service = FaceService()
+        print(f"Backend de inferência: {context.service.device}")
         faces = context.service.detect(image)
         if len(faces) != 1:
             raise PipelineError("reference", f"expected exactly one face, found {len(faces)}")
@@ -52,16 +55,33 @@ class PrepareReferenceHandler(Handler):
         context.history.append("prepared reference")
 
 
-class DetectFacesHandler(Handler):
+class DetectOrTrackFacesHandler(Handler):
     def process(self, context: FrameContext) -> None:
-        context.faces = context.service.detect(context.frame)
+        if context.should_detect:
+            context.faces = context.service.detect(context.frame)
+            context.detected = True
+            return
+
+        tracked_faces = context.service.update_tracks(context.frame, context.tracks)
+        if tracked_faces is None:
+            context.faces = context.service.detect(context.frame)
+            context.detected = True
+        else:
+            context.faces = tracked_faces
 
 
 class IdentifyTargetHandler(Handler):
     def process(self, context: FrameContext) -> None:
-        for face in context.faces:
-            candidate = context.service.embedding(context.frame, face)
+        if not context.detected or not context.faces:
+            return
+        for face, candidate in zip(context.faces, context.service.embeddings(context.frame, context.faces), strict=True):
             face.similarity = context.service.similarity(context.reference_embedding, candidate)
+
+
+class UpdateTracksHandler(Handler):
+    def process(self, context: FrameContext) -> None:
+        if context.detected:
+            context.tracks[:] = context.service.create_tracks(context.frame, context.faces)
 
 
 class BlurNonTargetFacesHandler(Handler):
@@ -120,14 +140,26 @@ class ProcessVideoHandler(Handler):
                         service=context.service,
                         reference_embedding=context.reference_embedding,
                         similarity_threshold=context.similarity_threshold,
+                        should_detect=context.frames_processed % context.detection_interval == 0,
+                        tracks=context.tracks,
                     )
                     chain.handle(frame_context)
                     kept = sum(face.similarity is not None and face.similarity >= context.similarity_threshold for face in frame_context.faces)
                     context.faces_kept += kept
                     context.faces_blurred += len(frame_context.faces) - kept
                     context.frames_processed += 1
+                    if frame_context.detected:
+                        context.frames_detected += 1
+                    else:
+                        context.frames_tracked += 1
                     progress.update()
-                    progress.set_postfix(kept=context.faces_kept, blurred=context.faces_blurred, refresh=False)
+                    progress.set_postfix(
+                        detected=context.frames_detected,
+                        tracked=context.frames_tracked,
+                        kept=context.faces_kept,
+                        blurred=context.faces_blurred,
+                        refresh=False,
+                    )
 
                     if context.debug_dir and frame_context.faces and not context.debug_frame_written:
                         annotated = context.service.annotate(
@@ -172,9 +204,9 @@ class RemuxAudioHandler(Handler):
 
 
 def _build_frame_pipeline() -> Handler:
-    first = DetectFacesHandler()
+    first = DetectOrTrackFacesHandler()
     current = first
-    for handler in (IdentifyTargetHandler(), BlurNonTargetFacesHandler(), WriteFrameHandler()):
+    for handler in (IdentifyTargetHandler(), UpdateTracksHandler(), BlurNonTargetFacesHandler(), WriteFrameHandler()):
         current = current.set_next(handler)
     return first
 
