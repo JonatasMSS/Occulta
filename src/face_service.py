@@ -78,7 +78,8 @@ class FaceService:
             raise PipelineError("face embedding", str(error)) from error
         if not result:
             raise PipelineError("face embedding", "ArcFace did not return an embedding")
-        return [np.asarray(item[0]["embedding"], dtype=np.float32) for item in result]
+        result_per_face = [result] if len(crops) == 1 else result
+        return [np.asarray(item[0]["embedding"], dtype=np.float32) for item in result_per_face]
 
     def embedding(self, image: np.ndarray, face: Face) -> np.ndarray:
         return self.embeddings(image, [face])[0]
