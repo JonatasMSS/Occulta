@@ -1,10 +1,12 @@
 import unittest
 from types import SimpleNamespace
+from unittest import mock
 
 import numpy as np
 import torch
 
 from face_blur import FaceResult, FrameContext
+from face_blur.app import build_parser
 from face_blur.handlers import (
     BlurHandler,
     FaceDetectionHandler,
@@ -177,18 +179,68 @@ class BlurHandlerTests(unittest.TestCase):
         self.assertFalse(np.array_equal(context.output_frame[10:40, 10:40], frame[10:40, 10:40]))
         self.assertFalse(np.array_equal(context.output_frame[60:90, 60:90], frame[60:90, 60:90]))
 
-    def test_debug_draws_target_box_on_final_frame(self):
-        frame = np.zeros((100, 100, 3), dtype=np.uint8)
+    def test_inverse_mode_blurs_target_and_keeps_non_target(self):
+        grid = np.indices((100, 100)).sum(axis=0) % 2 * 255
+        frame = np.repeat(grid[:, :, None], 3, axis=2).astype(np.uint8)
+        faces = [
+            FaceResult((10, 10, 40, 40), LANDMARKS.copy(), similarity=0.40),
+            FaceResult((60, 60, 90, 90), LANDMARKS.copy(), similarity=0.39),
+        ]
+        context = FrameContext(0, frame, faces=faces)
+
+        BlurHandler(threshold=0.40, blur_target=True).process(context)
+
+        self.assertFalse(np.array_equal(context.output_frame[10:40, 10:40], frame[10:40, 10:40]))
+        self.assertTrue(np.array_equal(context.output_frame[60:90, 60:90], frame[60:90, 60:90]))
+        self.assertTrue(faces[0].is_target)
+        self.assertFalse(faces[1].is_target)
+
+    def test_invalid_face_is_blurred_in_inverse_mode(self):
+        grid = np.indices((100, 100)).sum(axis=0) % 2 * 255
+        frame = np.repeat(grid[:, :, None], 3, axis=2).astype(np.uint8)
         context = FrameContext(
             0,
             frame,
-            faces=[FaceResult((20, 20, 80, 80), LANDMARKS.copy(), similarity=0.8)],
+            faces=[FaceResult((20, 20, 80, 80), LANDMARKS.copy(), similarity=None)],
         )
 
-        BlurHandler(debug=True).process(context)
+        BlurHandler(blur_target=True).process(context)
 
-        self.assertGreater(int(context.output_frame.sum()), 0)
-        self.assertTrue(context.faces[0].is_target)
+        self.assertFalse(np.array_equal(context.output_frame[20:80, 20:80], frame[20:80, 20:80]))
+
+    def test_debug_labels_show_identity_and_action(self):
+        context = FrameContext(
+            0,
+            np.zeros((100, 100, 3), dtype=np.uint8),
+            faces=[
+                FaceResult((5, 5, 25, 25), LANDMARKS.copy(), similarity=0.8),
+                FaceResult((35, 35, 55, 55), LANDMARKS.copy(), similarity=0.2),
+                FaceResult((65, 65, 85, 85), LANDMARKS.copy(), similarity=None),
+            ],
+        )
+
+        with mock.patch("face_blur.handlers.blur.cv2.putText") as put_text:
+            BlurHandler(debug=True, blur_target=True).process(context)
+
+        labels = [call.args[1] for call in put_text.call_args_list]
+        self.assertEqual(
+            labels,
+            ["TARGET BLUR 0.800", "NON_TARGET KEEP 0.200", "UNKNOWN BLUR inválido"],
+        )
+
+
+class CliTests(unittest.TestCase):
+    @staticmethod
+    def _args(*extra):
+        return build_parser().parse_args(
+            ["--video", "video.mp4", "--target", "target.png", "--output", "out.mp4", *extra]
+        )
+
+    def test_blur_target_is_disabled_by_default(self):
+        self.assertFalse(self._args().blur_target)
+
+    def test_blur_target_flag_enables_inverse_mode(self):
+        self.assertTrue(self._args("--blur-target").blur_target)
 
 
 class WriterHandlerTests(unittest.TestCase):
