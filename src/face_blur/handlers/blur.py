@@ -14,11 +14,13 @@ class BlurHandler(Handler):
         threshold: float = 0.40,
         debug: bool = False,
         margin: float = 0.15,
+        blur_target: bool = False,
     ) -> None:
         super().__init__()
         self.threshold = threshold
         self.debug = debug
         self.margin = margin
+        self.blur_target = blur_target
 
     def _padded_bbox(
         self, face: FaceResult, shape: Tuple[int, ...]
@@ -46,15 +48,23 @@ class BlurHandler(Handler):
         image[y1:y2, x1:x2] = cv2.GaussianBlur(roi, (kernel, kernel), 0)
 
     @staticmethod
-    def _annotate(image: np.ndarray, face: FaceResult, is_target: bool) -> None:
+    def _annotate(
+        image: np.ndarray,
+        face: FaceResult,
+        is_target: bool,
+        should_blur: bool,
+    ) -> None:
         x1, y1, x2, y2 = face.bbox
-        color = (0, 180, 0) if is_target else (0, 0, 255)
+        color = (0, 0, 255) if should_blur else (0, 180, 0)
         score = "inválido" if face.similarity is None else f"{face.similarity:.3f}"
-        decision = "TARGET" if is_target else "BLUR"
+        identity = "UNKNOWN" if face.similarity is None else (
+            "TARGET" if is_target else "NON_TARGET"
+        )
+        action = "BLUR" if should_blur else "KEEP"
         cv2.rectangle(image, (x1, y1), (x2, y2), color, 2)
         cv2.putText(
             image,
-            f"{decision} {score}",
+            f"{identity} {action} {score}",
             (x1, max(18, y1 - 8)),
             cv2.FONT_HERSHEY_SIMPLEX,
             0.5,
@@ -68,9 +78,12 @@ class BlurHandler(Handler):
         for face in context.faces:
             is_target = face.similarity is not None and face.similarity >= self.threshold
             face.is_target = is_target
-            if not is_target:
+            should_blur = face.similarity is None or (
+                is_target if self.blur_target else not is_target
+            )
+            if should_blur:
                 self._blur(output, self._padded_bbox(face, output.shape))
             if self.debug:
-                self._annotate(output, face, is_target)
+                self._annotate(output, face, is_target, should_blur)
         context.output_frame = output
         return True

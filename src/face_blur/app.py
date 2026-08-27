@@ -42,7 +42,7 @@ def _threshold(value: str) -> float:
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        description="Preserva o rosto-alvo e borra as demais faces de um vídeo."
+        description="Anonimiza faces de um vídeo com base em um rosto-alvo."
     )
     parser.add_argument("--video", type=Path, required=True, help="Vídeo de entrada.")
     parser.add_argument("--target", type=Path, required=True, help="Foto frontal alvo.")
@@ -57,6 +57,11 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--process-every", type=_positive_int, default=3)
     parser.add_argument("--det-size", type=_positive_int, default=416)
     parser.add_argument("--debug", action="store_true")
+    parser.add_argument(
+        "--blur-target",
+        action="store_true",
+        help="Borra o target e mantém as demais faces visíveis.",
+    )
     return parser
 
 
@@ -138,6 +143,7 @@ def run(
     process_every: int = 3,
     det_size: int = 416,
     debug: bool = False,
+    blur_target: bool = False,
 ) -> None:
     _validate_paths(video_path, target_path, model_path, output_path)
     if process_every < 1 or det_size < 1:
@@ -166,7 +172,9 @@ def run(
         first = FaceDetectionHandler(detector, process_every)
         first.set_next(embedding_handler).set_next(
             SimilarityHandler(target_embedding, threshold)
-        ).set_next(BlurHandler(threshold, debug)).set_next(writer)
+        ).set_next(
+            BlurHandler(threshold=threshold, debug=debug, blur_target=blur_target)
+        ).set_next(writer)
 
         frame_index = 0
         with tqdm(total=total or None, desc="Anonimizando", unit="frame") as progress:
@@ -198,5 +206,6 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         process_every=args.process_every,
         det_size=args.det_size,
         debug=args.debug,
+        blur_target=args.blur_target,
     )
     return 0
