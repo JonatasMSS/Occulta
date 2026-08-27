@@ -1,0 +1,19 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "face-blur"
+version = "0.1.0"
+description = "Anonimização seletiva de rostos com AdaFace IR-101"
+requires-python = ">=3.8"
+dependencies = [
+    "insightface",
+    "numpy",
+    "opencv-python",
+    "torch",
+    "tqdm",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
