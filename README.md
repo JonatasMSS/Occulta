@@ -263,6 +263,11 @@ progress callbacks, and a basic Streamlit smoke test.
 
 - There is no tracking yet. Between analyzed frames, Occulta reuses the latest
   boxes and decisions, so fast motion can cause temporary misalignment.
+- The detector can miss a face completely. Without a bounding box, Occulta has
+  no region to blur and that face may remain visible in the output.
+- Face matching can produce false accepts or false rejects. This may keep a
+  person visible when they should be blurred, or blur the wrong person,
+  depending on the selected anonymization mode.
 - `0.40` is a starting threshold, not a magic number. Use debug mode and tune
   it with footage similar to your real use case.
 - Pose, light, occlusion, motion blur, image quality, and dataset bias can all
