@@ -51,7 +51,7 @@ class SelectedTarget:
 def video_info(video_path: Path) -> VideoInfo:
     capture = cv2.VideoCapture(str(video_path))
     if not capture.isOpened():
-        raise ValueError("Não foi possível abrir o MP4 enviado.")
+        raise ValueError("The uploaded MP4 could not be opened.")
     try:
         info = VideoInfo(
             width=int(capture.get(cv2.CAP_PROP_FRAME_WIDTH)),
@@ -62,21 +62,21 @@ def video_info(video_path: Path) -> VideoInfo:
     finally:
         capture.release()
     if min(info.width, info.height, info.total_frames) <= 0 or info.fps <= 0:
-        raise ValueError("O vídeo não possui resolução, FPS ou frames válidos.")
+        raise ValueError("The video does not have valid dimensions, FPS, or frames.")
     return info
 
 
 def read_frame(video_path: Path, frame_index: int) -> np.ndarray:
     capture = cv2.VideoCapture(str(video_path))
     if not capture.isOpened():
-        raise ValueError("Não foi possível abrir o MP4 enviado.")
+        raise ValueError("The uploaded MP4 could not be opened.")
     try:
         capture.set(cv2.CAP_PROP_POS_FRAMES, frame_index)
         ok, frame = capture.read()
     finally:
         capture.release()
     if not ok:
-        raise ValueError(f"Não foi possível ler o frame {frame_index}.")
+        raise ValueError(f"Frame {frame_index} could not be read.")
     return frame
 
 
@@ -147,7 +147,7 @@ def toggle_target(
             targets.pop(index)
             return "removed"
     if len(targets) >= MAX_TARGETS:
-        raise ValueError(f"O limite é de {MAX_TARGETS} targets.")
+        raise ValueError(f"You can select up to {MAX_TARGETS} targets.")
     targets.append(target)
     return "added"
 
@@ -173,13 +173,13 @@ def prepare_target(
     )
 
 
-@st.cache_resource(scope="session", show_spinner="Carregando AdaFace...")
+@st.cache_resource(scope="session", show_spinner="Loading AdaFace...")
 def _embedding_runtime(model_path: str) -> Tuple[torch.device, FaceEmbeddingHandler]:
     device = select_device()
     return device, create_embedding_handler(Path(model_path), device)
 
 
-@st.cache_resource(scope="session", show_spinner="Carregando detector...")
+@st.cache_resource(scope="session", show_spinner="Loading face detector...")
 def _detector_runtime(device_type: str, det_size: int):
     return create_detector(torch.device(device_type), det_size)
 
@@ -239,21 +239,21 @@ def _output_path(original_name: str) -> Path:
 
 
 def _sidebar_controls() -> Tuple[bool, float, int, int, bool]:
-    st.sidebar.header("Configuração")
+    st.sidebar.header("Settings")
     mode = st.sidebar.radio(
-        "Ação",
-        ("Manter targets e borrar outros", "Borrar targets e manter outros"),
+        "Anonymization mode",
+        ("Keep targets, blur others", "Blur targets, keep others"),
     )
     threshold = st.sidebar.slider("Threshold", -1.0, 1.0, 0.40, 0.01)
     process_every = st.sidebar.number_input(
-        "Processar a cada X frames", min_value=1, value=3, step=1
+        "Analyze every N frames", min_value=1, value=3, step=1
     )
     det_size = st.sidebar.select_slider(
-        "Tamanho do detector", options=(320, 416, 512, 640), value=416
+        "Detector input size", options=(320, 416, 512, 640), value=416
     )
-    debug = st.sidebar.checkbox("Debug no vídeo final", value=False)
+    debug = st.sidebar.checkbox("Debug overlay on output", value=False)
     return (
-        mode == "Borrar targets e manter outros",
+        mode == "Blur targets, keep others",
         float(threshold),
         int(process_every),
         int(det_size),
@@ -262,18 +262,18 @@ def _sidebar_controls() -> Tuple[bool, float, int, int, bool]:
 
 
 def _show_targets(targets: List[SelectedTarget]) -> None:
-    st.subheader(f"Targets selecionados ({len(targets)}/{MAX_TARGETS})")
+    st.subheader(f"Selected targets ({len(targets)}/{MAX_TARGETS})")
     if not targets:
-        st.info("Clique dentro de uma caixa facial para selecionar um target.")
+        st.info("Click inside a face box to select a target.")
         return
     for target in list(targets):
         st.image(target.aligned_rgb, caption=target.name, width=112)
         st.caption(
             f"frame={target.frame_index} · bbox={target.bbox} · "
-            f"shape=3×112×112 · normalizado="
+            f"shape=3×112×112 · normalized="
             f"[{target.normalized_min:.3f}, {target.normalized_max:.3f}]"
         )
-        if st.button("Remover", key=f"remove_{target.name}"):
+        if st.button("Remove", key=f"remove_{target.name}"):
             targets.remove(target)
             st.rerun()
 
@@ -283,11 +283,11 @@ def _show_result() -> None:
     if not result or not Path(result).is_file():
         return
     result_path = Path(result)
-    st.subheader("Resultado")
+    st.subheader("Result")
     st.video(str(result_path))
     with result_path.open("rb") as video_file:
         st.download_button(
-            "Baixar vídeo",
+            "Download video",
             data=video_file,
             file_name=result_path.name,
             mime="video/mp4",
@@ -296,20 +296,20 @@ def _show_result() -> None:
 
 def main() -> None:
     st.set_page_config(page_title="Face Blur", layout="wide")
-    st.title("Anonimização seletiva de rostos")
-    st.caption("Envie um MP4, navegue até um frame e clique nas faces-alvo.")
+    st.title("Selective face anonymization")
+    st.caption("Upload an MP4, navigate to a frame, and click the target faces.")
 
     blur_target, threshold, process_every, det_size, debug = _sidebar_controls()
     uploaded = st.file_uploader(
-        "Vídeo MP4",
+        "MP4 video",
         type=("mp4",),
         max_upload_size=500,
         key="video_upload",
         on_change=_clear_video_state,
     )
     if uploaded is None:
-        st.info("Envie um vídeo para começar.")
-        st.button("Processar vídeo", type="primary", disabled=True)
+        st.info("Upload a video to get started.")
+        st.button("Process video", type="primary", disabled=True)
         return
 
     try:
@@ -332,7 +332,7 @@ def main() -> None:
         f"AdaFace {device} · detector {select_detector_provider(device)}"
     )
     frame_index = st.slider(
-        "Frame para selecionar targets",
+        "Frame used to select targets",
         min_value=0,
         max_value=info.total_frames - 1,
         value=0,
@@ -361,13 +361,13 @@ def main() -> None:
         )
         if not faces:
             st.warning(
-                "Nenhuma face detectada. Escolha outro frame ou aumente o detector."
+                "No faces detected. Try another frame or increase the detector size."
             )
         if click and click.get("unix_time") != st.session_state.get("last_click"):
             st.session_state.last_click = click.get("unix_time")
             face_index = find_face_at(int(click["x"]), int(click["y"]), boxes)
             if face_index is None:
-                st.warning("O clique não ficou dentro de uma caixa facial.")
+                st.warning("The click was outside every face box.")
             else:
                 name = target_name(frame_index, face_index)
                 existing = next((item for item in targets if item.name == name), None)
@@ -382,14 +382,14 @@ def main() -> None:
                     toggle_target(targets, candidate)
                     st.rerun()
                 except Exception as error:
-                    st.error(f"Não foi possível selecionar {name}: {error}")
+                    st.error(f"Could not select {name}: {error}")
     with right:
         _show_targets(targets)
 
-    if st.button("Processar vídeo", type="primary", disabled=not targets):
+    if st.button("Process video", type="primary", disabled=not targets):
         output_path = _output_path(uploaded.name)
-        progress = st.progress(0.0, text="Preparando processamento...")
-        status = st.status("Anonimizando vídeo...", expanded=False)
+        progress = st.progress(0.0, text="Preparing video processing...")
+        status = st.status("Anonymizing video...", expanded=False)
         last_percent = -1
 
         def report(processed: int, total: int) -> None:
@@ -399,7 +399,7 @@ def main() -> None:
                 last_percent = percent
                 progress.progress(
                     percent / 100,
-                    text=f"Anonimizando: {processed}/{total or '?'} frames",
+                    text=f"Anonymizing: {processed}/{total or '?'} frames",
                 )
 
         try:
@@ -417,11 +417,11 @@ def main() -> None:
                 progress_callback=report,
             )
             st.session_state.result_path = str(output_path)
-            status.update(label="Vídeo concluído", state="complete")
-            progress.progress(1.0, text="Processamento concluído.")
+            status.update(label="Video complete", state="complete")
+            progress.progress(1.0, text="Processing complete.")
         except Exception as error:
             output_path.unlink(missing_ok=True)
-            status.update(label="Falha no processamento", state="error", expanded=True)
+            status.update(label="Processing failed", state="error", expanded=True)
             st.error(str(error))
 
     _show_result()
