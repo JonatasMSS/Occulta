@@ -16,6 +16,12 @@ dependencies = [
     "tqdm",
 ]
 
+[project.optional-dependencies]
+ui = [
+    "streamlit>=1.62,<2",
+    "streamlit-image-coordinates==0.4.1",
+]
+
 [project.scripts]
 face-blur = "face_blur.app:main"
 
