@@ -57,9 +57,12 @@ class BlurHandler(Handler):
         x1, y1, x2, y2 = face.bbox
         color = (0, 0, 255) if should_blur else (0, 180, 0)
         score = "inválido" if face.similarity is None else f"{face.similarity:.3f}"
-        identity = "UNKNOWN" if face.similarity is None else (
-            "TARGET" if is_target else "NON_TARGET"
-        )
+        if face.similarity is None:
+            identity = "UNKNOWN"
+        elif is_target:
+            identity = f"TARGET {face.matched_target}"
+        else:
+            identity = f"NON_TARGET best={face.matched_target}"
         action = "BLUR" if should_blur else "KEEP"
         cv2.rectangle(image, (x1, y1), (x2, y2), color, 2)
         cv2.putText(

@@ -18,6 +18,7 @@ class FaceResult:
     similarity: Optional[float] = None
     is_target: bool = False
     error: Optional[str] = None
+    matched_target: Optional[str] = None
 
 
 @dataclass
